@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>스파 마스크 스탑워치</title>
+<style>
+  :root {
+    --text: #3b3a36;
+    --muted: #8a8579;
+    --line: rgba(120, 105, 85, .18);
+    --card: rgba(255, 255, 255, .55);
+    --start: #6aa889;
+    --stop: #d9776f;
+    --neutral: #e7dfd3;
+    --best: #4f9a76;
+    --worst: #c9625a;
+    --mask: #9fcfae;          /* 페이스 마스크 색 (스와치로 변경) */
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 32px 16px;
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+    background:
+      radial-gradient(circle at 15% 20%, rgba(255,255,255,.8), transparent 40%),
+      radial-gradient(circle at 85% 80%, rgba(190,215,200,.6), transparent 45%),
+      linear-gradient(135deg, #f5efe6 0%, #ece6dc 50%, #dfeae3 100%);
+    background-attachment: fixed;
+  }
+  .app {
+    width: 100%;
+    max-width: 960px;
+    display: grid;
+    gap: 24px;
+    align-items: center;
+  }
+  @media (min-width: 860px) {
+    .app { grid-template-columns: 1.1fr 1fr; }
+  }
+  .card {
+    background: var(--card);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,.7);
+    border-radius: 28px;
+    padding: 20px;
+    box-shadow: 0 10px 40px rgba(90, 75, 55, .08);
+  }
+
+  /* ---------- 일러스트 ---------- */
+  .scene { text-align: center; }
+  .scene svg { width: 100%; max-width: 440px; height: auto; display: block; margin: 0 auto; overflow: visible; }
+  .scene-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    white-space: nowrap;
+    margin-top: 8px;
+    padding: 0 6px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .swatches { display: flex; gap: 8px; }
+  .swatch {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px var(--line);
+    cursor: pointer;
+    padding: 0;
+  }
+  .swatch.active { box-shadow: 0 0 0 2px var(--text); }
+
+  /* ---------- 스탑워치 ---------- */
+  .watch { text-align: center; }
+  .time {
+    font-size: clamp(48px, 13vw, 72px);
+    font-weight: 300;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 1px;
+    margin: 12px 0 28px;
+  }
+  .time .ms { color: var(--muted); }
+  .buttons {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 24px;
+  }
+  .buttons button {
+    width: 88px; height: 88px;
+    border-radius: 50%;
+    border: none;
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text);
+    background: var(--neutral);
+    cursor: pointer;
+    transition: filter .15s, transform .05s;
+  }
+  .buttons button:hover:not(:disabled) { filter: brightness(1.05); }
+  .buttons button:active:not(:disabled) { transform: scale(.96); }
+  .buttons button:disabled { opacity: .45; cursor: default; }
+  .buttons button.start { background: var(--start); color: #fff; }
+  .buttons button.stop  { background: var(--stop);  color: #fff; }
+  .laps {
+    list-style: none;
+    margin: 0; padding: 0;
+    border-top: 1px solid var(--line);
+    text-align: left;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+  .laps li {
+    display: flex;
+    justify-content: space-between;
+    padding: 11px 4px;
+    border-bottom: 1px solid var(--line);
+    font-variant-numeric: tabular-nums;
+  }
+  .laps li span:first-child { color: var(--muted); }
+  .laps li.best span { color: var(--best); }
+  .laps li.worst span { color: var(--worst); }
+  .hint { margin: 20px 0 0; font-size: 13px; color: var(--muted); }
+  kbd {
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-family: inherit;
+    background: rgba(255,255,255,.6);
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ============ 스파 얼굴 일러스트 ============ -->
+  <section class="card scene">
+    <svg viewBox="0 0 400 470" xmlns="http://www.w3.org/2000/svg" aria-label="스파에서 페이스 마스크를 바르는 얼굴">
+      <defs>
+        <clipPath id="faceClip">
+          <path d="M200 110 C270 110 305 170 305 240 C305 320 260 385 200 385 C140 385 95 320 95 240 C95 170 130 110 200 110 Z"/>
+        </clipPath>
+
+        <!-- 붓 자국처럼 가장자리를 거칠게 -->
+        <filter id="brushEdge" x="-10%" y="-10%" width="120%" height="120%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.06" numOctaves="2" seed="4"/>
+          <feDisplacementMap in="SourceGraphic" scale="10"/>
+        </filter>
+
+        <!-- 바른 영역: 붓 경로가 그려진 만큼만 보이고, 눈·입술은 제외 -->
+        <mask id="paintMask" maskUnits="userSpaceOnUse" x="0" y="0" width="400" height="470">
+          <path id="paintPath" filter="url(#brushEdge)"
+                d="M112 175 L288 175 L300 205 L100 205 L97 235 L303 235 L302 265 L98 265
+                   L105 295 L295 295 L282 325 L118 325 L140 352 L260 352 L230 375 L170 375"
+                fill="none" stroke="#fff" stroke-width="40"
+                stroke-linecap="round" stroke-linejoin="round"/>
+          <ellipse cx="160" cy="262" rx="25" ry="13" fill="#000"/>
+          <ellipse cx="240" cy="262" rx="25" ry="13" fill="#000"/>
+          <ellipse cx="200" cy="335" rx="29" ry="14" fill="#000"/>
+        </mask>
+
+        <radialGradient id="maskShine" cx="40%" cy="35%" r="70%">
+          <stop offset="0" stop-color="#fff" stop-opacity=".45"/>
+          <stop offset=".6" stop-color="#fff" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+
+      <!-- 배경 원 -->
+      <circle cx="200" cy="240" r="190" fill="#fff" opacity=".45"/>
+
+      <!-- 어깨 수건 -->
+      <path d="M30 470 C55 405 130 392 200 402 C270 392 345 405 370 470 Z" fill="#fbfaf7"/>
+      <path d="M80 440 C120 420 160 415 200 418 M220 418 C260 415 290 420 320 440" stroke="#e7e2da" stroke-width="3" fill="none" stroke-linecap="round"/>
+
+      <!-- 목 -->
+      <path d="M165 360 L165 410 C180 420 220 420 235 410 L235 360 Z" fill="#ebbfa4"/>
+
+      <!-- 귀 -->
+      <ellipse cx="93" cy="268" rx="14" ry="24" fill="#efc4aa"/>
+      <ellipse cx="307" cy="268" rx="14" ry="24" fill="#efc4aa"/>
+
+      <!-- 얼굴 -->
+      <path d="M200 110 C270 110 305 170 305 240 C305 320 260 385 200 385 C140 385 95 320 95 240 C95 170 130 110 200 110 Z" fill="#f6d3bb"/>
+
+      <!-- 볼 홍조 -->
+      <circle cx="138" cy="302" r="17" fill="#f2a9a0" opacity=".35"/>
+      <circle cx="262" cy="302" r="17" fill="#f2a9a0" opacity=".35"/>
+
+      <!-- 눈썹 -->
+      <path d="M135 238 Q160 226 184 236" stroke="#8a6450" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <path d="M216 236 Q240 226 265 238" stroke="#8a6450" stroke-width="4" fill="none" stroke-linecap="round"/>
+
+      <!-- 감은 눈 + 속눈썹 -->
+      <g stroke="#5a4036" stroke-width="3" fill="none" stroke-linecap="round">
+        <path d="M140 260 Q160 273 180 260"/>
+        <path d="M146 266 l-4 6 M160 270 l0 7 M174 266 l4 6"/>
+        <path d="M220 260 Q240 273 260 260"/>
+        <path d="M226 266 l-4 6 M240 270 l0 7 M254 266 l4 6"/>
+      </g>
+
+      <!-- 코 -->
+      <path d="M201 272 Q197 294 190 301 Q200 308 210 301" stroke="#d9a68a" stroke-width="3" fill="none" stroke-linecap="round"/>
+
+      <!-- 입술 -->
+      <path d="M178 333 Q190 324 200 330 Q210 324 222 333 Q200 351 178 333 Z" fill="#d98a8a"/>
+
+      <!-- ===== 페이스 마스크 레이어 ===== -->
+      <g clip-path="url(#faceClip)" mask="url(#paintMask)">
+        <rect x="80" y="100" width="240" height="300" style="fill: var(--mask)" opacity=".95"/>
+        <rect x="80" y="100" width="240" height="300" fill="url(#maskShine)"/>
+      </g>
+
+      <!-- 하얀 터번 -->
+      <path d="M150 168 C175 158 225 158 250 168" stroke="rgba(0,0,0,.07)" stroke-width="10" fill="none"/>
+      <path d="M78 245 C60 130 125 45 200 42 C275 45 340 130 322 245 C300 200 255 162 200 162 C145 162 100 200 78 245 Z" fill="#fdfcfa"/>
+      <g stroke="#e8e3db" stroke-width="3" fill="none" stroke-linecap="round">
+        <path d="M100 160 C140 115 230 100 295 145"/>
+        <path d="M88 205 C130 150 250 135 312 200"/>
+        <path d="M120 110 C170 80 240 80 280 105"/>
+      </g>
+      <!-- 터번 매듭 -->
+      <ellipse cx="218" cy="72" rx="56" ry="30" transform="rotate(-14 218 72)" fill="#fdfcfa"/>
+      <g stroke="#e8e3db" stroke-width="3" fill="none" stroke-linecap="round">
+        <path d="M172 82 C195 60 235 52 262 58"/>
+        <path d="M185 95 C210 80 245 74 268 78"/>
+      </g>
+
+      <!-- ===== 마스크 붓 (붓 끝이 원점) ===== -->
+      <g id="brush">
+        <g id="brushInner">
+          <path d="M-5 -130 L5 -130 L6 -46 L-6 -46 Z" fill="#b98b5e"/>
+          <rect x="-5" y="-130" width="10" height="10" rx="3" fill="#9c7048"/>
+          <rect x="-10" y="-47" width="20" height="17" rx="2" fill="#c9cdd2"/>
+          <rect x="-10" y="-42" width="20" height="3" fill="#aeb3b9"/>
+          <path d="M-10 -30 L10 -30 L7 -4 Q0 4 -7 -4 Z" fill="#f3ece2"/>
+          <path d="M-8 -14 L8 -14 L7 -4 Q0 4 -7 -4 Z" style="fill: var(--mask)"/>
+        </g>
+      </g>
+    </svg>
+
+    <div class="scene-bar">
+      <span id="progressText">시작을 누르면 마스크를 발라요</span>
+      <div class="swatches" id="swatches">
+        <button class="swatch active" data-color="#9fcfae" style="background:#9fcfae" title="그린 클레이"></button>
+        <button class="swatch" data-color="#f3a6b5" style="background:#f3a6b5" title="로즈"></button>
+        <button class="swatch" data-color="#9cc7e6" style="background:#9cc7e6" title="아쿠아"></button>
+        <button class="swatch" data-color="#c4a8e0" style="background:#c4a8e0" title="라벤더"></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 스탑워치 ============ -->
+  <main class="card watch">
+    <div class="time" id="display">00:00<span class="ms">.00</span></div>
+
+    <div class="buttons">
+      <button id="lapReset" disabled>랩</button>
+      <button id="startStop" class="start">시작</button>
+    </div>
+
+    <ul class="laps" id="laps"></ul>
+
+    <p class="hint"><kbd>Space</kbd> 시작/정지 · <kbd>L</kbd> 랩 · <kbd>R</kbd> 리셋</p>
+  </main>
+</div>
+
+<script>
+  // 얼굴 전체에 마스크를 다 바르는 데 걸리는 시간(ms). 바꾸려면 이 값만 수정하세요.
+  const PAINT_DURATION = 60000;
+
+  const display = document.getElementById('display');
+  const startStopBtn = document.getElementById('startStop');
+  const lapResetBtn = document.getElementById('lapReset');
+  const lapList = document.getElementById('laps');
+  const paintPath = document.getElementById('paintPath');
+  const brush = document.getElementById('brush');
+  const progressText = document.getElementById('progressText');
+  const pathLen = paintPath.getTotalLength();
+
+  paintPath.style.strokeDasharray = pathLen;
+
+  let running = false;
+  let startTime = 0;
+  let elapsed = 0;
+  let lapStart = 0;
+  let laps = [];
+  let rafId = null;
+
+  function now() { return performance.now(); }
+  function total() { return running ? elapsed + (now() - startTime) : elapsed; }
+
+  function format(ms) {
+    const cs = Math.floor(ms / 10) % 100;
+    const s = Math.floor(ms / 1000) % 60;
+    const m = Math.floor(ms / 60000) % 60;
+    const h = Math.floor(ms / 3600000);
+    const pad = n => String(n).padStart(2, '0');
+    const main = (h > 0 ? h + ':' : '') + pad(m) + ':' + pad(s);
+    return { main, ms: '.' + pad(cs) };
+  }
+
+  // ---------- 마스크 바르기 장면 ----------
+  function updateScene(t) {
+    const p = Math.min(t / PAINT_DURATION, 1);
+
+    // 바른 만큼 마스크 노출
+    paintPath.style.visibility = p > 0 ? 'visible' : 'hidden';
+    paintPath.style.strokeDashoffset = pathLen * (1 - p);
+
+    if (t === 0) {
+      // 대기 상태: 붓은 오른쪽 아래에 놓여 있음
+      brush.setAttribute('transform', 'translate(335 430) rotate(62)');
+      progressText.textContent = '시작을 누르면 마스크를 발라요';
+      return;
+    }
+
+    // 다 바른 뒤에는 같은 경로를 반복하며 다듬기
+    const along = p < 1 ? p : (t % PAINT_DURATION) / PAINT_DURATION;
+    const pt = paintPath.getPointAtLength(along * pathLen);
+    const wobble = running ? Math.sin(t / 110) * 7 : 0;
+    brush.setAttribute('transform', `translate(${pt.x.toFixed(1)} ${pt.y.toFixed(1)}) rotate(${(32 + wobble).toFixed(1)})`);
+
+    if (p < 1) {
+      progressText.textContent = `마스크 바르는 중 ${Math.floor(p * 100)}%`;
+    } else {
+      progressText.textContent = '마스크 완성! 다듬는 중';
+    }
+    if (!running) progressText.textContent = `일시정지 · ${p < 1 ? Math.floor(p * 100) + '%' : '완성'}`;
+  }
+
+  // ---------- 스탑워치 ----------
+  function render() {
+    const t = total();
+    const f = format(t);
+    display.innerHTML = `${f.main}<span class="ms">${f.ms}</span>`;
+    renderCurrentLap();
+    updateScene(t);
+  }
+
+  function tick() {
+    render();
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function renderCurrentLap() {
+    let cur = lapList.querySelector('li.current');
+    if (!running && elapsed === 0) { if (cur) cur.remove(); return; }
+    if (!cur) {
+      cur = document.createElement('li');
+      cur.className = 'current';
+      cur.innerHTML = '<span></span><span></span>';
+      lapList.prepend(cur);
+    }
+    const f = format(total() - lapStart);
+    cur.children[0].textContent = `랩 ${laps.length + 1}`;
+    cur.children[1].textContent = f.main + f.ms;
+  }
+
+  function renderLaps() {
+    lapList.querySelectorAll('li:not(.current)').forEach(li => li.remove());
+    const min = Math.min(...laps), max = Math.max(...laps);
+    laps.forEach((ms, i) => {
+      const li = document.createElement('li');
+      if (laps.length >= 2) {
+        if (ms === min) li.className = 'best';
+        else if (ms === max) li.className = 'worst';
+      }
+      const f = format(ms);
+      li.innerHTML = `<span>랩 ${i + 1}</span><span>${f.main}${f.ms}</span>`;
+      lapList.insertBefore(li, lapList.querySelector('li.current')?.nextSibling || null);
+    });
+  }
+
+  function startStop() {
+    if (running) {
+      elapsed += now() - startTime;
+      running = false;
+      cancelAnimationFrame(rafId);
+      startStopBtn.textContent = '시작';
+      startStopBtn.className = 'start';
+      lapResetBtn.textContent = '리셋';
+      render();
+    } else {
+      startTime = now();
+      running = true;
+      startStopBtn.textContent = '정지';
+      startStopBtn.className = 'stop';
+      lapResetBtn.textContent = '랩';
+      lapResetBtn.disabled = false;
+      tick();
+    }
+  }
+
+  function lap() {
+    if (!running) return;
+    const t = total();
+    laps.push(t - lapStart);
+    lapStart = t;
+    renderLaps();
+    render();
+  }
+
+  function reset() {
+    if (running) return;
+    elapsed = 0;
+    lapStart = 0;
+    laps = [];
+    lapList.innerHTML = '';
+    lapResetBtn.textContent = '랩';
+    lapResetBtn.disabled = true;
+    render();
+  }
+
+  startStopBtn.addEventListener('click', startStop);
+  lapResetBtn.addEventListener('click', () => running ? lap() : reset());
+
+  document.addEventListener('keydown', e => {
+    if (e.repeat) return;
+    if (e.code === 'Space') { e.preventDefault(); startStop(); }
+    else if (e.key === 'l' || e.key === 'L') lap();
+    else if (e.key === 'r' || e.key === 'R') reset();
+  });
+
+  // 마스크 색 선택
+  document.getElementById('swatches').addEventListener('click', e => {
+    const btn = e.target.closest('.swatch');
+    if (!btn) return;
+    document.documentElement.style.setProperty('--mask', btn.dataset.color);
+    document.querySelectorAll('.swatch').forEach(s => s.classList.toggle('active', s === btn));
+  });
+
+  render();
+</script>
+</body>
+</html>
